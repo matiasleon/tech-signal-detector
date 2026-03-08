@@ -1,0 +1,112 @@
+package usecase
+
+import (
+	"context"
+	"fmt"
+	"time"
+
+	"github.com/google/uuid"
+	"github.com/matiasleonperalta/tech-signal-detectors/internal/domain"
+)
+
+// RelevanceEvaluator determines whether a raw feed is relevant.
+// It is used exclusively for arXiv feeds, where relevance cannot be
+// determined by a numeric score alone.
+type RelevanceEvaluator interface {
+	Evaluate(ctx context.Context, feed domain.RawFeed) (bool, error)
+}
+
+// FilterUseCase evaluates raw feeds against per-source filtering rules,
+// persists the ones that pass as domain.Signal records, and returns them.
+type FilterUseCase struct {
+	sources   domain.SourceRepository
+	signals   domain.SignalRepository
+	evaluator RelevanceEvaluator
+}
+
+// NewFilterUseCase creates a new FilterUseCase.
+func NewFilterUseCase(
+	sources domain.SourceRepository,
+	signals domain.SignalRepository,
+	evaluator RelevanceEvaluator,
+) *FilterUseCase {
+	return &FilterUseCase{
+		sources:   sources,
+		signals:   signals,
+		evaluator: evaluator,
+	}
+}
+
+// Execute filters the provided feeds according to per-source rules,
+// saves passing feeds as signals, and returns the created signals.
+func (uc *FilterUseCase) Execute(ctx context.Context, feeds []domain.RawFeed) ([]domain.Signal, error) {
+	// Cache sources looked up during this execution to avoid redundant DB calls.
+	sourceCache := make(map[string]*domain.Source)
+
+	var created []domain.Signal
+
+	for _, feed := range feeds {
+		source, err := uc.resolveSource(ctx, feed.SourceID, sourceCache)
+		if err != nil {
+			return nil, fmt.Errorf("filter: resolve source for feed %s: %w", feed.ID, err)
+		}
+
+		passes, err := uc.passes(ctx, feed, source)
+		if err != nil {
+			return nil, fmt.Errorf("filter: evaluate feed %s: %w", feed.ID, err)
+		}
+		if !passes {
+			continue
+		}
+
+		signal := domain.Signal{
+			ID:             uuid.NewString(),
+			RawFeedID:      feed.ID,
+			RelevanceScore: feed.Score,
+			CreatedAt:      time.Now(),
+		}
+
+		if err := uc.signals.Save(ctx, signal); err != nil {
+			return nil, fmt.Errorf("filter: save signal for feed %s: %w", feed.ID, err)
+		}
+
+		created = append(created, signal)
+	}
+
+	return created, nil
+}
+
+// resolveSource returns the Source for the given id, consulting the cache first.
+func (uc *FilterUseCase) resolveSource(
+	ctx context.Context,
+	sourceID string,
+	cache map[string]*domain.Source,
+) (*domain.Source, error) {
+	if s, ok := cache[sourceID]; ok {
+		return s, nil
+	}
+
+	s, err := uc.sources.GetByID(ctx, sourceID)
+	if err != nil {
+		return nil, err
+	}
+
+	cache[sourceID] = s
+	return s, nil
+}
+
+// passes reports whether a feed should produce a signal, according to the
+// filtering rule defined for its source type.
+func (uc *FilterUseCase) passes(ctx context.Context, feed domain.RawFeed, source *domain.Source) (bool, error) {
+	switch source.Type {
+	case domain.SourceTypeArXiv:
+		return uc.evaluator.Evaluate(ctx, feed)
+
+	case domain.SourceTypeTechCrunch:
+		// Editorial source — all items are considered relevant.
+		return true, nil
+
+	default:
+		return feed.Score >= source.ScoreThreshold, nil
+	}
+}
