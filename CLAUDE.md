@@ -18,33 +18,59 @@ The result: stay informed like a CTO without spending hours reading feeds.
 
 **Goal:** Stay connected with the latest tech trends and AI best practices, as a CTO would.
 
-**Sources:**
-- HackerNews — filtered by upvotes + comments
-- arXiv — filtered by LLM relevance on title/abstract (cs.AI, cs.LG focus)
+**Sources (v1 implemented):**
+- HackerNews — filtered by score threshold (upvotes)
+- arXiv (cs.AI + cs.LG) — filtered by Claude API relevance evaluation
+
+**Sources (roadmap):**
 - GitHub Trending — filtered by daily stars
 - Product Hunt — filtered by upvotes and daily ranking
-- TechCrunch — filtered by category/tags (no engagement metrics)
+- TechCrunch — editorial, passes always
 
 **Output:** Telegram bot — title + link per signal
 
 **Trigger:** `/ultimas-novedades` Telegram command (on-demand, not scheduled)
 
-**Filtering:** Simple threshold-based per source metrics for v1. arXiv uses LLM to evaluate relevance.
+**Filtering:** Each source has its own `ScoreThreshold`. Collectors compute the score. arXiv uses Claude API (Haiku) to evaluate relevance since it has no engagement metrics.
+
+**Deduplication:** RawFeeds are deduplicated by `(source_id, external_id)` — each item is fetched and evaluated only once ever.
 
 ## Tech Stack
 
-- **Language:** Go
-- **Database:** SQLite (local/dev) → PostgreSQL (cloud). Swappable via repository interfaces.
-- **Telegram:** `go-telegram-bot-api`
-- **LLM:** Claude API via `anthropic-sdk-go` (used to evaluate arXiv relevance)
+- **Language:** Go 1.22+
+- **Database:** SQLite via `modernc.org/sqlite` (no CGO). Swappable to PostgreSQL via repository interfaces.
+- **Telegram:** `go-telegram-bot-api/v5`
+- **LLM:** Claude Haiku (`claude-haiku-4-5-20251001`) via `anthropic-sdk-go` — used only for arXiv relevance
 - **RSS parsing:** `gofeed`
+
+## Commands
+
+```bash
+# Run
+source .env && go run ./cmd/bot
+
+# Build
+go build -o bin/bot ./cmd/bot
+
+# Verify compilation
+go build ./...
+```
+
+## Environment Variables
+
+| Variable | Required | Description |
+|---|---|---|
+| `TELEGRAM_BOT_TOKEN` | Yes | From @BotFather |
+| `TELEGRAM_CHAT_ID` | Yes | Your Telegram user ID |
+| `ANTHROPIC_API_KEY` | Yes | From console.anthropic.com |
+| `DB_PATH` | No | SQLite file path (default: `signals.db`) |
 
 ## Architecture Principles
 
 Clean Architecture — domain has zero knowledge of infrastructure details (SQLite, Telegram, HTTP). All external dependencies are behind interfaces defined by the domain.
 
 - **Domain layer:** entities (Source, RawFeed, Signal) and repository interfaces. No imports from infrastructure.
-- **Use case layer:** application logic (fetch, filter, send). Depends only on domain interfaces.
+- **Use case layer:** application logic (fetch, filter, deliver). Depends only on domain interfaces.
 - **Infrastructure layer:** concrete implementations — SQLite repositories, HTTP collectors per source, Telegram sender, Claude client. Swapping SQLite for PostgreSQL only touches this layer.
 
 SOLID and Clean Code apply throughout. Prefer small, focused functions and explicit interfaces over concrete dependencies.
@@ -53,47 +79,88 @@ SOLID and Clean Code apply throughout. Prefer small, focused functions and expli
 
 ```
 tech-signal-detectors/
-├── cmd/
-│   └── bot/
-│       └── main.go          # entrypoint
+├── cmd/bot/main.go              # entrypoint — wires all components, seeds sources
 ├── internal/
 │   ├── domain/
-│   │   ├── source.go        # Source entity
-│   │   ├── rawfeed.go       # RawFeed entity
-│   │   ├── signal.go        # Signal entity
-│   │   └── repository.go    # persistence interfaces
+│   │   ├── source.go            # Source entity (includes ScoreThreshold)
+│   │   ├── rawfeed.go           # RawFeed entity
+│   │   ├── signal.go            # Signal entity
+│   │   └── repository.go       # persistence interfaces
 │   ├── usecase/
-│   │   ├── fetch.go         # fetch from sources
-│   │   ├── filter.go        # scoring and filtering
-│   │   └── deliver.go       # send signals via Telegram
+│   │   ├── fetch.go             # Collector interface + FetchUseCase
+│   │   ├── filter.go            # RelevanceEvaluator interface + FilterUseCase
+│   │   └── deliver.go           # Notifier interface + DeliverUseCase
 │   └── infrastructure/
-│       ├── persistence/
-│       │   └── sqlite/      # SQLite implementation of repositories
-│       ├── collector/
-│       │   ├── hackernews.go
-│       │   ├── arxiv.go
-│       │   ├── github.go
-│       │   ├── producthunt.go
-│       │   └── techcrunch.go
-│       ├── llm/
-│       │   └── claude.go    # Claude API client
-│       └── telegram/
-│           └── bot.go       # bot and command handlers
+│       ├── persistence/sqlite/  # db.go (shared conn + schema) + 3 repo files
+│       ├── collector/           # hackernews.go, arxiv.go
+│       ├── llm/claude.go        # RelevanceEvaluator via Claude Haiku
+│       └── telegram/            # bot.go (command handler), notifier.go
 ├── go.mod
+├── .env.example
 └── CLAUDE.md
 ```
 
-**Roadmap:**
-- v2: Like/dislike feedback loop to personalize signal ranking over time
-- v3: Web UI
+## Adding a New Source
+
+1. Add `SourceType` constant to `domain/source.go`
+2. Implement `usecase.Collector` in `infrastructure/collector/`
+3. Register it in `cmd/bot/main.go` collectors map
+4. Add seed entry in `seedSources()` with the appropriate `ScoreThreshold`
+
+No changes needed in use cases or domain.
 
 ## Domain Entities
 
 **Source** — configured information sources
-- id, name, type (hn/arxiv/github/producthunt/techcrunch), url, enabled
+- id, name, type, url, enabled, score_threshold
 
 **RawFeed** — everything fetched before filtering
-- id, source_id, external_id, title, url, published_at, score, fetched_at
+- id, source_id, external_id, title, url, score, published_at, fetched_at
 
-**Signal** — items that passed the filter and were sent to the user
+**Signal** — items that passed the filter
 - id, raw_feed_id, relevance_score, sent_at, created_at
+
+## Development Methodology
+
+### Parallel development with subagents
+
+This project uses Claude Code subagents to parallelize independent tasks and accelerate development.
+
+**Key facts about subagents:**
+- Each subagent gets its own isolated context window — it does NOT inherit the parent conversation
+- Subagents automatically load `CLAUDE.md` from the project directory — use this to share context instead of repeating it in every prompt
+- Subagents cannot spawn other subagents (no nesting)
+- Background subagents (`run_in_background: true`) run concurrently; permissions must be pre-approved upfront
+
+**When to launch subagents in parallel:**
+- Multiple files that are independent of each other (e.g. one collector per source, one repo per entity)
+- Infrastructure components that don't depend on each other (SQLite + Telegram + Claude client)
+- Any set of tasks where the output of one is not the input of another
+
+**When to work sequentially (main conversation):**
+- Domain design and architectural decisions — these need back-and-forth with the user
+- When one component depends on another being complete (e.g. main.go after all infrastructure exists)
+- When reviewing and validating that everything compiles together
+- Quick, targeted changes — subagents have startup overhead
+
+**The workflow we follow:**
+1. **Define the "what" before the "how"** — agree on entities, interfaces, and flow before touching code
+2. **Keep CLAUDE.md updated** — subagents load it automatically, reducing context that needs to be passed in each prompt
+3. **Design interfaces in the domain layer first** — use cases and infrastructure implement them
+4. **Launch parallel background subagents** for independent implementation tasks
+5. **Verify compilation** after all agents complete (`go build ./...`)
+6. **Commit working state** before moving to the next layer
+
+**Optimization: use CLAUDE.md as shared context**
+Since subagents load CLAUDE.md automatically, keep entities, interfaces, and architectural decisions documented here. This avoids copying domain definitions into every subagent prompt — just reference "see CLAUDE.md for domain entities".
+
+**Example from this project:**
+- Domain entities → sequential (foundation for everything, requires design decisions)
+- Use cases (fetch, filter, deliver) → parallel (3 background agents)
+- Infrastructure (SQLite, Telegram, Claude, HackerNews, arXiv) → parallel (5 background agents)
+- main.go → sequential (wires everything together, depends on all infrastructure)
+
+## Roadmap
+
+- v2: Like/dislike feedback loop to personalize signal ranking over time
+- v3: Web UI
