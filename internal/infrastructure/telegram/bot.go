@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	msgBuscando     = "Buscando novedades..."
+	msgBuscando     = "Buscando novedades... puede tardar hasta 30 segundos mientras evaluamos papers con IA 🤖"
 	msgSinNovedades = "No hay novedades nuevas por ahora."
 	msgStart        = "👋 Hola! Soy tu detector de señales tecnológicas.\n\nMonitoreo HackerNews y arXiv para traerte solo lo que vale la pena leer.\n\nComandos disponibles:\n/ultimas_novedades — trae las señales más relevantes"
 )

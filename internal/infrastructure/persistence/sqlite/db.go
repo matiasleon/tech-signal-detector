@@ -65,8 +65,41 @@ CREATE TABLE IF NOT EXISTS signals (
     created_at DATETIME NOT NULL
 );
 `
-	_, err := d.db.Exec(schema)
-	return err
+	if _, err := d.db.Exec(schema); err != nil {
+		return err
+	}
+
+	// Add published_at column to signals if it does not already exist.
+	// SQLite does not support IF NOT EXISTS for ALTER TABLE, so we ignore
+	// "duplicate column" errors.
+	_, alterErr := d.db.Exec(`ALTER TABLE signals ADD COLUMN published_at DATETIME NOT NULL DEFAULT ''`)
+	if alterErr != nil && !isDuplicateColumn(alterErr) {
+		return alterErr
+	}
+
+	return nil
+}
+
+// isDuplicateColumn reports whether err indicates a duplicate column in SQLite.
+func isDuplicateColumn(err error) bool {
+	if err == nil {
+		return false
+	}
+	return contains(err.Error(), "duplicate column")
+}
+
+// contains is a simple substring check to avoid importing strings in the migration helper.
+func contains(s, sub string) bool {
+	return len(s) >= len(sub) && (s == sub || len(sub) == 0 || indexStr(s, sub) >= 0)
+}
+
+func indexStr(s, sub string) int {
+	for i := 0; i <= len(s)-len(sub); i++ {
+		if s[i:i+len(sub)] == sub {
+			return i
+		}
+	}
+	return -1
 }
 
 // queryRow is a thin wrapper around QueryRowContext.

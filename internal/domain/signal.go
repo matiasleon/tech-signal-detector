@@ -8,6 +8,7 @@ type Signal struct {
 	RelevanceScore float64
 	SentAt         *time.Time
 	CreatedAt      time.Time
+	PublishedAt    time.Time
 }
 
 func (s *Signal) WasSent() bool {

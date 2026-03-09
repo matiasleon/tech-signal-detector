@@ -3,13 +3,14 @@ package usecase
 import (
 	"context"
 	"log"
+	"time"
 
 	"github.com/matiasleonperalta/tech-signal-detectors/internal/domain"
 )
 
 // Notifier sends a notification for a given feed item.
 type Notifier interface {
-	Send(ctx context.Context, title, url string) error
+	Send(ctx context.Context, title, url string, publishedAt time.Time) error
 }
 
 // DeliverUseCase orchestrates delivering unsent signals via a Notifier.
@@ -47,7 +48,7 @@ func (uc *DeliverUseCase) Execute(ctx context.Context, signals []domain.Signal) 
 		}
 
 		log.Printf("[deliver] sending: %s", feed.Title)
-		if err := uc.notifier.Send(ctx, feed.Title, feed.URL); err != nil {
+		if err := uc.notifier.Send(ctx, feed.Title, feed.URL, signal.PublishedAt); err != nil {
 			log.Printf("[deliver] ERROR send signal %s: %v", signal.ID, err)
 			continue
 		}

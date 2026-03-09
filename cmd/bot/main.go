@@ -47,12 +47,14 @@ func main() {
 	}
 
 	collectors := map[domain.SourceType]usecase.Collector{
-		domain.SourceTypeHackerNews: collector.NewHackerNews(),
-		domain.SourceTypeArXiv:      collector.NewArXiv(),
+		domain.SourceTypeHackerNews:  collector.NewHackerNews(),
+		domain.SourceTypeArXiv:       collector.NewArXiv(),
+		domain.SourceTypeTechCrunch:  collector.NewTechCrunch(),
+		domain.SourceTypeProductHunt: collector.NewProductHunt(),
 	}
 
 	fetch := usecase.NewFetchUseCase(sourceRepo, rawFeedRepo, collectors)
-	filter := usecase.NewFilterUseCase(sourceRepo, signalRepo, evaluator)
+	filter := usecase.NewFilterUseCase(sourceRepo, signalRepo, evaluator, 50)
 	deliver := usecase.NewDeliverUseCase(signalRepo, rawFeedRepo, notifier)
 
 	handler := func(ctx context.Context) (int, error) {
@@ -92,6 +94,22 @@ func seedSources(ctx context.Context, repo domain.SourceRepository) error {
 			ID:             "arxiv-ai",
 			Name:           "arXiv AI/ML",
 			Type:           domain.SourceTypeArXiv,
+			URL:            "",
+			Enabled:        true,
+			ScoreThreshold: 0,
+		},
+		{
+			ID:             "techcrunch",
+			Name:           "TechCrunch",
+			Type:           domain.SourceTypeTechCrunch,
+			URL:            "",
+			Enabled:        true,
+			ScoreThreshold: 0,
+		},
+		{
+			ID:             "producthunt",
+			Name:           "Product Hunt",
+			Type:           domain.SourceTypeProductHunt,
 			URL:            "",
 			Enabled:        true,
 			ScoreThreshold: 0,

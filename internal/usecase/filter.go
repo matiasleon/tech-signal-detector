@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"sort"
 	"time"
 
 	"github.com/google/uuid"
@@ -20,9 +21,10 @@ type RelevanceEvaluator interface {
 // FilterUseCase evaluates raw feeds against per-source filtering rules,
 // persists the ones that pass as domain.Signal records, and returns them.
 type FilterUseCase struct {
-	sources   domain.SourceRepository
-	signals   domain.SignalRepository
-	evaluator RelevanceEvaluator
+	sources    domain.SourceRepository
+	signals    domain.SignalRepository
+	evaluator  RelevanceEvaluator
+	maxSignals int
 }
 
 // NewFilterUseCase creates a new FilterUseCase.
@@ -30,11 +32,13 @@ func NewFilterUseCase(
 	sources domain.SourceRepository,
 	signals domain.SignalRepository,
 	evaluator RelevanceEvaluator,
+	maxSignals int,
 ) *FilterUseCase {
 	return &FilterUseCase{
-		sources:   sources,
-		signals:   signals,
-		evaluator: evaluator,
+		sources:    sources,
+		signals:    signals,
+		evaluator:  evaluator,
+		maxSignals: maxSignals,
 	}
 }
 
@@ -46,7 +50,7 @@ func (uc *FilterUseCase) Execute(ctx context.Context, feeds []domain.RawFeed) ([
 
 	var created []domain.Signal
 
-	log.Printf("[filter] evaluating %d feeds", len(feeds))
+	log.Printf("[filter] evaluating %d feeds (max signals: %d)", len(feeds), uc.maxSignals)
 
 	for _, feed := range feeds {
 		source, err := uc.resolveSource(ctx, feed.SourceID, sourceCache)
@@ -71,6 +75,7 @@ func (uc *FilterUseCase) Execute(ctx context.Context, feeds []domain.RawFeed) ([
 			RawFeedID:      feed.ID,
 			RelevanceScore: feed.Score,
 			CreatedAt:      time.Now(),
+			PublishedAt:    feed.PublishedAt,
 		}
 
 		if err := uc.signals.Save(ctx, signal); err != nil {
@@ -78,6 +83,15 @@ func (uc *FilterUseCase) Execute(ctx context.Context, feeds []domain.RawFeed) ([
 		}
 
 		created = append(created, signal)
+	}
+
+	// Sort all passing signals by PublishedAt descending and cap to maxSignals.
+	sort.Slice(created, func(i, j int) bool {
+		return created[i].PublishedAt.After(created[j].PublishedAt)
+	})
+	if uc.maxSignals > 0 && len(created) > uc.maxSignals {
+		log.Printf("[filter] limiting %d signals to %d (sorted by published_at desc)", len(created), uc.maxSignals)
+		created = created[:uc.maxSignals]
 	}
 
 	log.Printf("[filter] %d signals created", len(created))

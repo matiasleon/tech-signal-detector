@@ -20,8 +20,8 @@ func NewSignalRepository(db *DB) *SignalRepository {
 // Save inserts a new Signal row.
 func (r *SignalRepository) Save(ctx context.Context, signal domain.Signal) error {
 	const q = `
-INSERT INTO signals (id, raw_feed_id, relevance_score, sent_at, created_at)
-VALUES (?, ?, ?, ?, ?)`
+INSERT INTO signals (id, raw_feed_id, relevance_score, sent_at, created_at, published_at)
+VALUES (?, ?, ?, ?, ?, ?)`
 
 	return r.db.exec(ctx, q,
 		signal.ID,
@@ -29,13 +29,14 @@ VALUES (?, ?, ?, ?, ?)`
 		signal.RelevanceScore,
 		signal.SentAt,
 		signal.CreatedAt,
+		signal.PublishedAt,
 	)
 }
 
 // GetUnsent returns all signals where sent_at IS NULL.
 func (r *SignalRepository) GetUnsent(ctx context.Context) ([]domain.Signal, error) {
 	const q = `
-SELECT id, raw_feed_id, relevance_score, sent_at, created_at
+SELECT id, raw_feed_id, relevance_score, sent_at, created_at, published_at
 FROM signals
 WHERE sent_at IS NULL`
 
@@ -49,7 +50,7 @@ WHERE sent_at IS NULL`
 	for rows.Next() {
 		var s domain.Signal
 		var sentAt *time.Time
-		if err := rows.Scan(&s.ID, &s.RawFeedID, &s.RelevanceScore, &sentAt, &s.CreatedAt); err != nil {
+		if err := rows.Scan(&s.ID, &s.RawFeedID, &s.RelevanceScore, &sentAt, &s.CreatedAt, &s.PublishedAt); err != nil {
 			return nil, err
 		}
 		s.SentAt = sentAt
