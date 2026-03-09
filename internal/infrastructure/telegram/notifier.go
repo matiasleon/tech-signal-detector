@@ -27,9 +27,9 @@ func NewNotifier(token string, chatID int64) (*Notifier, error) {
 	}, nil
 }
 
-// Send formats the title, date and url as a message and sends it to the configured chat.
-func (n *Notifier) Send(_ context.Context, title, url string, publishedAt time.Time) error {
-	text := fmt.Sprintf("%s\n📅 %s | 🔗 %s", title, publishedAt.Format("02 Jan 2006"), url)
+// Send formats the title, source, date and url as a message and sends it to the configured chat.
+func (n *Notifier) Send(_ context.Context, title, url, sourceName string, publishedAt time.Time) error {
+	text := fmt.Sprintf("%s\n📰 %s | 📅 %s | 🔗 %s", title, sourceName, publishedAt.Format("02 Jan 2006"), url)
 
 	msg := tgbotapi.NewMessage(n.chatID, text)
 

@@ -55,7 +55,7 @@ func main() {
 
 	fetch := usecase.NewFetchUseCase(sourceRepo, rawFeedRepo, collectors)
 	filter := usecase.NewFilterUseCase(sourceRepo, signalRepo, evaluator, 50)
-	deliver := usecase.NewDeliverUseCase(signalRepo, rawFeedRepo, notifier)
+	deliver := usecase.NewDeliverUseCase(signalRepo, rawFeedRepo, sourceRepo, notifier)
 
 	handler := func(ctx context.Context) (int, error) {
 		feeds, err := fetch.Execute(ctx)
