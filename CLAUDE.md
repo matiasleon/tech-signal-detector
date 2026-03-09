@@ -18,18 +18,18 @@ The result: stay informed like a CTO without spending hours reading feeds.
 
 **Goal:** Stay connected with the latest tech trends and AI best practices, as a CTO would.
 
-**Sources (v1 implemented):**
-- HackerNews — filtered by score threshold (upvotes)
+**Sources (implemented):**
+- HackerNews — filtered by score threshold (upvotes ≥ 100)
 - arXiv (cs.AI + cs.LG) — filtered by Claude API relevance evaluation
+- TechCrunch — editorial, always passes
+- Product Hunt — RSS, always passes
 
 **Sources (roadmap):**
 - GitHub Trending — filtered by daily stars
-- Product Hunt — filtered by upvotes and daily ranking
-- TechCrunch — editorial, passes always
 
-**Output:** Telegram bot — title + link per signal
+**Output:** Telegram bot — title + published date + link per signal
 
-**Trigger:** `/ultimas-novedades` Telegram command (on-demand, not scheduled)
+**Trigger:** `/ultimas_novedades` Telegram command (on-demand, not scheduled)
 
 **Filtering:** Each source has its own `ScoreThreshold`. Collectors compute the score. arXiv uses Claude API (Haiku) to evaluate relevance since it has no engagement metrics.
 
@@ -92,7 +92,7 @@ tech-signal-detectors/
 │   │   └── deliver.go           # Notifier interface + DeliverUseCase
 │   └── infrastructure/
 │       ├── persistence/sqlite/  # db.go (shared conn + schema) + 3 repo files
-│       ├── collector/           # hackernews.go, arxiv.go
+│       ├── collector/           # hackernews.go, arxiv.go, techcrunch.go, producthunt.go
 │       ├── llm/claude.go        # RelevanceEvaluator via Claude Haiku
 │       └── telegram/            # bot.go (command handler), notifier.go
 ├── go.mod
@@ -118,7 +118,7 @@ No changes needed in use cases or domain.
 - id, source_id, external_id, title, url, score, published_at, fetched_at
 
 **Signal** — items that passed the filter
-- id, raw_feed_id, relevance_score, sent_at, created_at
+- id, raw_feed_id, relevance_score, sent_at, created_at, published_at
 
 ## Design Philosophy
 
@@ -167,6 +167,10 @@ Since subagents load CLAUDE.md automatically, keep entities, interfaces, and arc
 - Use cases (fetch, filter, deliver) → parallel (3 background agents)
 - Infrastructure (SQLite, Telegram, Claude, HackerNews, arXiv) → parallel (5 background agents)
 - main.go → sequential (wires everything together, depends on all infrastructure)
+
+## Iteration History
+
+All bugs found, design decisions, and improvements are documented in [`ITERATIONS.md`](./ITERATIONS.md). Read it to understand *why* things are built the way they are — especially decisions that might look surprising at first (e.g. why TechCrunch always passes, why the filter collects all signals before limiting, why the Atom API instead of arXiv RSS).
 
 ## Roadmap
 
