@@ -14,6 +14,16 @@ This system acts as an intelligent filter: it monitors the sources where relevan
 
 The result: stay informed like a CTO without spending hours reading feeds.
 
+### Competitive positioning
+
+**vs. newsletters (TLDR, Morning Brew):** A newsletter is one editor's opinion for 100k people. Signal learns your specific criteria over time. The like/dislike feedback loop means it gets more precise the more you use it — a newsletter never does.
+
+**vs. RSS readers (Feedly, Matcher.news):** RSS readers give you a better interface to navigate content. Signal removes the navigation entirely — it's for people who want to be told what matters, not organize what to read. Matcher.news uses swipe-based UX but has no AI filter and no learning. The user still does all the curation work.
+
+**The core distinction:** Signal is not a reading tool. It's a filtering tool. You don't open it to browse — you open it to see what the algorithm decided you should know about today.
+
+**One-line pitch:** *"TLDR.tech tells you what matters to other CTOs. Signal tells you what matters to you."*
+
 ## Product Definition (v1)
 
 **Goal:** Stay connected with the latest tech trends and AI best practices, as a CTO would.
