@@ -12,11 +12,12 @@ import (
 	"github.com/mmcdole/gofeed"
 )
 
-const defaultArXivURL = "https://export.arxiv.org/rss/cs.AI+cs.LG"
+// defaultArXivURL uses the Atom API which works 7 days a week (unlike the RSS feed which skips weekends).
+const defaultArXivURL = "https://export.arxiv.org/api/query?search_query=cat:cs.AI&sortBy=submittedDate&sortOrder=descending&max_results=30"
 
 var htmlTagRe = regexp.MustCompile(`<[^>]+>`)
 
-// ArXiv is a Collector implementation that fetches papers from an arXiv RSS/Atom feed.
+// ArXiv is a Collector implementation that fetches papers from the arXiv Atom API.
 type ArXiv struct {
 	parser *gofeed.Parser
 }
@@ -28,7 +29,7 @@ func NewArXiv() *ArXiv {
 	}
 }
 
-// Collect fetches papers from the arXiv feed and maps them to domain.RawFeed values.
+// Collect fetches papers from the arXiv Atom API and maps them to domain.RawFeed values.
 func (a *ArXiv) Collect(ctx context.Context, source domain.Source) ([]domain.RawFeed, error) {
 	url := source.URL
 	if url == "" {

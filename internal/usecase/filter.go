@@ -3,6 +3,7 @@ package usecase
 import (
 	"context"
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/google/uuid"
@@ -45,6 +46,8 @@ func (uc *FilterUseCase) Execute(ctx context.Context, feeds []domain.RawFeed) ([
 
 	var created []domain.Signal
 
+	log.Printf("[filter] evaluating %d feeds", len(feeds))
+
 	for _, feed := range feeds {
 		source, err := uc.resolveSource(ctx, feed.SourceID, sourceCache)
 		if err != nil {
@@ -55,9 +58,13 @@ func (uc *FilterUseCase) Execute(ctx context.Context, feeds []domain.RawFeed) ([
 		if err != nil {
 			return nil, fmt.Errorf("filter: evaluate feed %s: %w", feed.ID, err)
 		}
+
 		if !passes {
+			log.Printf("[filter] SKIP  [%s] %s (score=%.0f threshold=%.0f)", source.Name, feed.Title, feed.Score, source.ScoreThreshold)
 			continue
 		}
+
+		log.Printf("[filter] PASS  [%s] %s (score=%.0f)", source.Name, feed.Title, feed.Score)
 
 		signal := domain.Signal{
 			ID:             uuid.NewString(),
@@ -73,6 +80,7 @@ func (uc *FilterUseCase) Execute(ctx context.Context, feeds []domain.RawFeed) ([
 		created = append(created, signal)
 	}
 
+	log.Printf("[filter] %d signals created", len(created))
 	return created, nil
 }
 

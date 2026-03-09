@@ -37,23 +37,29 @@ go mod download
 
 ### 5. Configure environment variables
 
+Create a `.env` file in the project root (never commit this file):
+
 ```bash
-cp .env.example .env
-# Edit .env with your actual values
+TELEGRAM_BOT_TOKEN=your_bot_token_here
+TELEGRAM_CHAT_ID=your_chat_id_here
+ANTHROPIC_API_KEY=your_anthropic_api_key_here
+DB_PATH=signals.db
 ```
 
 ### 6. Run
 
 ```bash
-source .env && go run ./cmd/bot
+go run ./cmd/bot
 ```
 
 Or build a binary:
 
 ```bash
 go build -o bin/bot ./cmd/bot
-source .env && ./bin/bot
+./bin/bot
 ```
+
+The app automatically loads `.env` from the project root at startup.
 
 ## Usage
 

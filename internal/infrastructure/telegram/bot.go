@@ -3,25 +3,26 @@ package telegram
 import (
 	"context"
 	"fmt"
+	"log"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
 const (
-	cmdUltimasNovedades = "/ultimas-novedades"
-	msgBuscando         = "Buscando novedades..."
-	msgSinNovedades     = "No hay novedades por ahora."
+	msgBuscando     = "Buscando novedades..."
+	msgSinNovedades = "No hay novedades nuevas por ahora."
+	msgStart        = "👋 Hola! Soy tu detector de señales tecnológicas.\n\nMonitoreo HackerNews y arXiv para traerte solo lo que vale la pena leer.\n\nComandos disponibles:\n/ultimas_novedades — trae las señales más relevantes"
 )
 
 // Bot listens for Telegram commands and delegates to a handler function.
 type Bot struct {
 	api     *tgbotapi.BotAPI
 	chatID  int64
-	handler func(ctx context.Context) error
+	handler func(ctx context.Context) (int, error)
 }
 
 // NewBot creates a new Bot using the provided token, chat ID, and handler.
-func NewBot(token string, chatID int64, handler func(ctx context.Context) error) (*Bot, error) {
+func NewBot(token string, chatID int64, handler func(ctx context.Context) (int, error)) (*Bot, error) {
 	api, err := tgbotapi.NewBotAPI(token)
 	if err != nil {
 		return nil, fmt.Errorf("telegram bot: create bot api: %w", err)
@@ -52,24 +53,29 @@ func (b *Bot) Start(ctx context.Context) error {
 				return nil
 			}
 
-			if update.Message == nil {
+			if update.Message == nil || !update.Message.IsCommand() {
 				continue
 			}
 
-			if update.Message.Command() != "ultimas-novedades" {
-				continue
+			cmd := update.Message.Command()
+			log.Printf("[bot] command received: /%s", cmd)
+
+			switch cmd {
+			case "start":
+				b.sendText(msgStart)
+
+			case "ultimas_novedades":
+				b.sendText(msgBuscando)
+				count, err := b.handler(ctx)
+				if err != nil {
+					log.Printf("[bot] handler error: %v", err)
+					b.sendText(fmt.Sprintf("Error: %v", err))
+				} else if count == 0 {
+					b.sendText(msgSinNovedades)
+				}
+			default:
+				log.Printf("[bot] unknown command: /%s", cmd)
 			}
-
-			b.sendText(msgBuscando)
-
-			if err := b.handler(ctx); err != nil {
-				b.sendText(fmt.Sprintf("Error: %v", err))
-				continue
-			}
-
-			// The handler is responsible for sending individual notifications via the
-			// Notifier. If it returns nil without sending anything the user is informed.
-			b.sendText(msgSinNovedades)
 		}
 	}
 }

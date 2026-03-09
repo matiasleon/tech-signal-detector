@@ -10,7 +10,10 @@ import (
 	"github.com/matiasleonperalta/tech-signal-detectors/internal/domain"
 )
 
-const defaultHNURL = "https://hn.algolia.com/api/v1/search?tags=story&hitsPerPage=30&numericFilters=points>0"
+const hnBaseURL = "https://hn.algolia.com/api/v1/search?tags=story&hitsPerPage=30"
+
+// lookbackHours defines how far back to fetch HN stories.
+const lookbackHours = 48
 
 type hnResponse struct {
 	Hits []hnHit `json:"hits"`
@@ -32,11 +35,12 @@ func NewHackerNews() *HackerNews {
 	return &HackerNews{}
 }
 
-// Collect fetches HackerNews stories and maps them to domain.RawFeed values.
+// Collect fetches recent HackerNews stories (last 48h) and maps them to domain.RawFeed values.
 func (h *HackerNews) Collect(ctx context.Context, source domain.Source) ([]domain.RawFeed, error) {
 	url := source.URL
 	if url == "" {
-		url = defaultHNURL
+		since := time.Now().Add(-lookbackHours * time.Hour).Unix()
+		url = fmt.Sprintf("%s&numericFilters=created_at_i%%3E%d", hnBaseURL, since)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)

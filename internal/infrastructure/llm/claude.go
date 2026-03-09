@@ -32,7 +32,16 @@ func NewRelevanceEvaluator(apiKey string) *RelevanceEvaluator {
 // professional and returns true if the answer contains "yes".
 func (e *RelevanceEvaluator) Evaluate(ctx context.Context, feed domain.RawFeed) (bool, error) {
 	prompt := fmt.Sprintf(
-		"Is the following paper or article relevant for a tech professional interested in software development, AI, and emerging technology trends?\n\nTitle: %s\n\nRespond with ONLY \"yes\" or \"no\".",
+		"You are a filter for a software CTO. Approve ONLY papers and articles directly related to:\n"+
+			"- Large language models, AI agents, ML infrastructure\n"+
+			"- Software development tools and practices\n"+
+			"- System architecture, cloud, performance\n"+
+			"- Software security\n"+
+			"- Physics (any area)\n\n"+
+			"Reject papers about: medicine, biology, chemistry, social sciences, "+
+			"or AI applied outside software and technology contexts.\n\n"+
+			"Title: %s\n\n"+
+			"Respond with ONLY \"yes\" or \"no\".",
 		feed.Title,
 	)
 

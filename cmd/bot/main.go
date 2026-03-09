@@ -6,6 +6,7 @@ import (
 	"os"
 	"strconv"
 
+	"github.com/joho/godotenv"
 	"github.com/matiasleonperalta/tech-signal-detectors/internal/domain"
 	"github.com/matiasleonperalta/tech-signal-detectors/internal/infrastructure/collector"
 	"github.com/matiasleonperalta/tech-signal-detectors/internal/infrastructure/llm"
@@ -15,6 +16,10 @@ import (
 )
 
 func main() {
+	if err := godotenv.Load(); err != nil {
+		log.Println("No .env file found, reading from environment")
+	}
+
 	botToken := mustEnv("TELEGRAM_BOT_TOKEN")
 	chatID := mustInt64Env("TELEGRAM_CHAT_ID")
 	anthropicKey := mustEnv("ANTHROPIC_API_KEY")
@@ -50,14 +55,14 @@ func main() {
 	filter := usecase.NewFilterUseCase(sourceRepo, signalRepo, evaluator)
 	deliver := usecase.NewDeliverUseCase(signalRepo, rawFeedRepo, notifier)
 
-	handler := func(ctx context.Context) error {
+	handler := func(ctx context.Context) (int, error) {
 		feeds, err := fetch.Execute(ctx)
 		if err != nil {
-			return err
+			return 0, err
 		}
 		signals, err := filter.Execute(ctx, feeds)
 		if err != nil {
-			return err
+			return 0, err
 		}
 		return deliver.Execute(ctx, signals)
 	}
@@ -87,7 +92,7 @@ func seedSources(ctx context.Context, repo domain.SourceRepository) error {
 			ID:             "arxiv-ai",
 			Name:           "arXiv AI/ML",
 			Type:           domain.SourceTypeArXiv,
-			URL:            "https://export.arxiv.org/rss/cs.AI+cs.LG",
+			URL:            "",
 			Enabled:        true,
 			ScoreThreshold: 0,
 		},

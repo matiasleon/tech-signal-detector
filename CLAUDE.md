@@ -120,6 +120,14 @@ No changes needed in use cases or domain.
 **Signal** — items that passed the filter
 - id, raw_feed_id, relevance_score, sent_at, created_at
 
+## Design Philosophy
+
+Always prefer the simplest solution that solves the actual problem. When evaluating options, question assumptions and look for the approach with the least friction for the developer and user.
+
+**Example:** instead of documenting `source .env && go run ./cmd/bot` (two steps, requires shell knowledge), we added `godotenv` so the app loads `.env` automatically — `go run ./cmd/bot` is enough. The library is a small tradeoff for a much simpler experience.
+
+When a workaround feels awkward, stop and ask: is there a cleaner solution?
+
 ## Development Methodology
 
 ### Parallel development with subagents
